@@ -1,0 +1,68 @@
+OASISFormat: 0.4
+Name:        Termite
+Version:     0.1
+Synopsis:    Termination with smt solvers.
+Authors:     Lucas Seguinot, David Monniaux, Laure Gonnord, Gabriel Radanne
+License:     LGPL with Ocaml linking exception
+Plugins:     META (0.3), DevFiles (0.3)
+
+AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
+BuildTools: ocamlbuild
+
+Library termite
+  Path: src
+  BuildDepends:
+    batteries, zarith,
+    Z3, Z3overlay, Z3overlay.optim,
+    llvm.bitreader, llvm.scalar_opts, llvm2smt
+  Modules:
+    Config, Debug, Vector, Subspace, Smt,
+    Invariants, Lp,
+    Algo1, Monodimensional, Multidimensional, MonodimMultiPc
+
+Executable termite
+  Path: src
+  MainIs: main.ml
+  BuildDepends: termite
+  CompiledObject: best
+
+
+## Doc
+
+Document "termite"
+  Title: API reference for Termite
+  Type: ocamlbuild (0.3)
+  BuildTools: ocamldoc
+  XOCamlbuildPath: ./
+  XOCamlbuildLibraries: termite
+  XOCamlbuildExtraArgs: "-docflags '-colorize-code, -short-functors, -charset, utf-8'"
+
+
+## Tests
+
+Executable test_multipc
+  Path: tests
+  Build$: flag(tests)
+  Install: false
+  BuildDepends: termite
+  CompiledObject: best
+  MainIs: test_multipc.ml
+
+Test test_multipc
+  Command: PATH=../optimathsat5/:"\${PATH}" $test_multipc
+  TestTools: test_multipc
+  Run$: flag(tests)
+
+
+Executable test_subspace
+  Path: tests
+  Build$: flag(tests)
+  Install: false
+  BuildDepends: termite
+  CompiledObject: best
+  MainIs: test_subspace.ml
+
+Test test_subspace
+  Command: PATH=../optimathsat5/:"\${PATH}" $test_subspace
+  TestTools: test_subspace
+  Run$: flag(tests)

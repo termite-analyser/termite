@@ -1,0 +1,19 @@
+opam-version: "1.2"
+name: "termite"
+version: "0.1"
+maintainer: "Gabriel <Gabriel.Radanne@imag.fr>"
+authors: "Gabriel <Gabriel.Radanne@imag.fr>"
+build: [
+  ["./configure" "--prefix" prefix]
+  [make]
+  [make "install"]
+]
+remove: ["ocamlfind" "remove" "termite"]
+depends: [
+  "ocamlfind"
+  "llvm"
+  "zarith"
+  "batteries"
+  "z3overlay"
+  "llvm2smt"
+]

@@ -1,0 +1,210 @@
+(*Main file for test. only one file for all algorithms*)
+
+open Debug
+open Llvm
+open Smt
+
+module SMTg = Smt_graph.Make (Smt.ZZ)
+module Llvm2Smt = Llvm2smt.Init (Smt.ZZ) (SMTg)
+
+let print s =
+  (if !Config.debug then Printf.fprintf else Printf.ifprintf) stdout s
+
+(*algo1, monodim ou multidim etpicetout*)
+type config_t = {
+  inputfile:string;
+  algotype:int;
+}
+
+(** Read the bitcode, output a list of llvm functions. *)
+let read_bitcode file =
+  print "Reading %s\n%!" file ;
+  let ctx = Llvm.create_context () in
+
+  (* Parse the bitcode. *)
+  let mem = Llvm.MemoryBuffer.of_file file in
+  let m = Llvm_bitreader.parse_bitcode ctx mem in
+  Llvm.MemoryBuffer.dispose mem ;
+
+  (* Apply the mem2reg pass, just in case. *)
+  let pass = PassManager.create () in
+  Llvm_scalar_opts.add_memory_to_register_promotion pass ;
+  ignore @@ PassManager.run_module m pass ;
+
+  Llvm.fold_left_functions (fun l x -> x :: l) [] m
+
+
+let get_invariants_of_cpoint invariants cpoint =
+  try List.find (fun b -> b.Invariants.control_point = cpoint) invariants
+  with Not_found ->
+    failwith
+      (Printf.sprintf "Couldn't find invariants for the block %s."
+         (value_name @@ value_of_block cpoint))
+
+
+(** Transform a bitcode straight to an smt formula. *)
+let llvm2smt llfun =
+  print "Transforming %s into an smt formula.\n%!" (Llvm.value_name llfun) ;
+  let open Llvm2Smt in
+  let open Llvm_graph in
+
+  (* Get the graph *)
+  let llb2node, llg = of_llfunction llfun in
+
+  (* Get pagai's control points *)
+  let cpoints = Invariants.(get_pagai_control_points @@ get_invariant_metadatas llfun) in
+  print "%i control points:" @@ List.length cpoints ;
+  List.iter (fun b -> print " %s" @@ string_of_llvalue @@ value_of_block b) cpoints ;
+  print "\n%!" ;
+
+  (* Get pagai's invariants. *)
+  let invariants = Invariants.from_llfun llfun in
+
+  (* Filter out the invariants to get only the control_points. *)
+  let cp_invariants = List.map (get_invariants_of_cpoint invariants) cpoints in
+
+  (* Break down the graph. *)
+  let llg' = break_list llg @@ basicblocks_to_vertices llg cpoints in
+  if !Config.debug then begin
+    let file = open_out (value_name llfun ^ ".term.dot") in
+    Dot.output_graph file llg' ;
+    close_out file ;
+  end ;
+
+  (* Transform the CFG to SMT. *)
+  let smtg = llvm2smt llfun cpoints llg' in
+  if !Config.debug then begin
+    let file = open_out (value_name llfun ^ ".term.smt.dot") in
+    SMTg.Dot.output_graph file smtg ;
+    close_out file ;
+  end ;
+  let smt_cfg = SMTg.to_smt smtg in
+  print "CFG Formula:\n%s\n%!" ZZ.T.(to_string smt_cfg) ;
+
+  let encode_block inv =
+    ZZ.T.imply
+      (get_block false inv.Invariants.control_point)
+      (Invariants.to_smt (get_var false) inv)
+  in
+  let smt_inv = ZZ.T.and_ @@ List.map encode_block invariants in
+  print "Invariants Formula:\n%s\n%!" ZZ.T.(to_string smt_inv) ;
+
+  (* The end. *)
+  let smt = ZZ.T.and_ [smt_cfg ; smt_inv] in
+  smt, cp_invariants
+
+
+let get_unique_invariant ~llf = function
+  | [] -> failwith @@ Printf.sprintf "No invariants for function %s." @@ value_name llf
+  | [ cp ] -> cp
+  | _ -> failwith @@
+      Printf.sprintf "Algo 1, 2 and 3 only accept function with one control points. %s has multiple control points" @@ value_name llf
+
+(** Do I really need to tell you what it's doing ? :) *)
+let compute_ranking_function ~llf algo block_dict dictionnary invariants tau =
+  print "Computing ranking functions with algorithm n°%d \n%!" algo ;
+  match algo with
+    | 1 ->
+        let inv = get_unique_invariant ~llf invariants in
+        let l, c =
+          Algo1.algo1 ~verbose:!Config.debug block_dict dictionnary inv tau in
+        Format.printf "l = %a@,"
+          pp_coefs (Some c, l, Array.map (dictionnary false) inv.variables) ;
+    | 2 ->
+        let inv = get_unique_invariant ~llf invariants in
+        let l, c, _b =
+          Monodimensional.monodimensional ~verbose:!Config.debug block_dict dictionnary inv tau in
+        Format.printf "l = %a@,"
+          pp_coefs (Some c, l, Array.map (dictionnary false) inv.variables) ;
+    | 3 ->
+        let inv = get_unique_invariant ~llf invariants in
+        let v =
+          Multidimensional.multidimensional ~verbose:!Config.debug block_dict dictionnary inv tau in
+        begin match v with
+          | None -> print_endline "No ranking function found."
+          | Some v ->
+              List.iter (fun (l,c) ->
+                Format.printf "l = %a@,"
+                  pp_coefs (Some c, l, Array.map (dictionnary false) inv.variables) ;
+              ) v
+        end
+    | 4 ->
+        let l, c, _b =
+          MonodimMultiPc.monodimensional ~verbose:!Config.debug block_dict dictionnary invariants tau in
+        let variables, _, _ = Invariants.group_to_matrix invariants in
+        Format.printf "l = %a@,"
+          pp_coefs (Some c, l, Array.map (dictionnary false) variables) ;
+    | n -> Printf.printf "There is no algorithm n°%i\n%!" n
+
+
+let do_analysis config =
+  config.inputfile
+  |> read_bitcode
+  |> List.iter (fun llfun ->
+    if Array.length (Llvm.basic_blocks llfun) = 0
+    then () (* If the function is empty, we just skip it. *)
+    else begin
+      let tau, invariants = llvm2smt llfun in
+      compute_ranking_function
+        llfun config.algotype
+        Llvm2Smt.get_block Llvm2Smt.get_var
+        invariants tau
+    end)
+exception NotFound of string
+
+
+let set_numalgo config nb= config := {!config with algotype=nb}
+let make_default_config () = {inputfile = "" ; algotype = 4 }
+let set_and_verify_file config (s:string) =
+  if not (Sys.file_exists s)  then  raise (NotFound s)
+  else
+      config := {!config with inputfile=s}
+
+
+let read_args  () =
+  let cf = ref (make_default_config ()) in
+  let speclist = [
+    "--version",
+    Arg.Unit (fun () ->
+      Printf.printf "Termite Version %s \n%!" Config.version; exit 0),
+    ": print version and exit" ;
+
+    "-algo",
+    Arg.Int (set_numalgo cf),
+    ": Algo1(1),mono(2), multi(3) or multipc(4)" ;
+
+    "-pip",
+    Arg.String (fun s -> Config.pip := s),
+    ": Set the pip executable" ;
+
+    "-v", Arg.Unit (fun () -> Config.debug := true),": Be verbose." ;
+  ]
+  in
+  let msg = "***\ntermite Version" ^ Config.version in
+  let usage_msg = msg^"\n***\n"^"Usage : termite [options] file \n
+Default : analysis of file in nts format, with algo=4 \n
+Options : " in
+
+  Arg.parse speclist (set_and_verify_file cf) usage_msg ;
+    if !cf.inputfile = "" then begin Arg.usage speclist usage_msg ; exit 1 end;
+    !cf
+(*end of options*)
+
+
+(*Main function*)
+
+let _ =
+  try
+    let cf = read_args () in
+    do_analysis cf
+  with
+    | NotFound s ->
+        Printf.eprintf "File not found: %s\n%!" s ; exit 1
+    | Sys_error s ->
+        Printf.eprintf "Sys_error: %s\n%!" s ; exit 1
+    | Llvm2smt.Not_implemented llv ->
+        Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn llv ; exit 1
+    | Llvm2smt.Variable_not_found x as exn ->
+        Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn_var x ; raise exn
+    | Llvm2smt.Block_not_found x as exn ->
+        Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn_block x ; raise exn

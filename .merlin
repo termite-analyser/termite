@@ -1,0 +1,16 @@
+B _build
+B _build/src
+B _build/src_light
+
+S .
+S src
+S src_light
+
+PKG num
+PKG unix
+PKG zarith
+PKG z3
+PKG z3overlay
+PKG llvm2smt
+PKG llvm
+PKG batteries
