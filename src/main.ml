@@ -10,7 +10,6 @@ module Llvm2Smt = Llvm2smt.Init (Smt.ZZ) (SMTg)
 let print s =
   (if !Config.debug then Printf.fprintf else Printf.ifprintf) stdout s
 
-(*algo1, monodim ou multidim etpicetout*)
 type config_t = {
   inputfile:string;
   algotype:int;
@@ -150,8 +149,9 @@ let do_analysis config =
         Llvm2Smt.get_block Llvm2Smt.get_var
         invariants tau
     end)
-exception NotFound of string
 
+
+exception NotFound of string
 
 let set_numalgo config nb= config := {!config with algotype=nb}
 let make_default_config () = {inputfile = "" ; algotype = 4 }
@@ -171,15 +171,12 @@ let read_args  () =
 
     "-algo",
     Arg.Int (set_numalgo cf),
-    ": Algo1(1),mono(2), multi(3) or multipc(4)" ;
+    ": Algo1(1),mono(2), multi(3) or multipc(4). Default is 4." ;
 
     "-v", Arg.Unit (fun () -> Config.debug := true),": Be verbose." ;
   ]
   in
-  let msg = "***\ntermite Version" ^ Config.version in
-  let usage_msg = msg^"\n***\n"^"Usage : termite [options] file \n
-Default : analysis of file in nts format, with algo=4 \n
-Options : " in
+  let usage_msg = "Usage : termite [options] file" in
 
   Arg.parse speclist (set_and_verify_file cf) usage_msg ;
     if !cf.inputfile = "" then begin Arg.usage speclist usage_msg ; exit 1 end;
