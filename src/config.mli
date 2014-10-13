@@ -9,8 +9,3 @@ val version : string
    else it details the steps of the computation
 *)
 val debug : bool ref
-
-(**
-   Path of the pip executable
-*)
-val pip : string ref

@@ -173,10 +173,6 @@ let read_args  () =
     Arg.Int (set_numalgo cf),
     ": Algo1(1),mono(2), multi(3) or multipc(4)" ;
 
-    "-pip",
-    Arg.String (fun s -> Config.pip := s),
-    ": Set the pip executable" ;
-
     "-v", Arg.Unit (fun () -> Config.debug := true),": Be verbose." ;
   ]
   in
