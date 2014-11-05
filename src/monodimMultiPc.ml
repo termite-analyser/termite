@@ -39,13 +39,11 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
   (** The array from control_points (as ints) to basic block (as bools) *)
   let index_to_cp primed =
     let a0 = Z3Array.make (Array (Int,Bool)) T.false_ in
-    let a , _ =
-      List.fold_left
-        (fun (a, i) inv ->
-           Z3Array.set a (T.int i) (block_dict primed inv.control_point) , i+1
-        )
-        (a0, 0) invariants
-    in a
+    BatList.fold_lefti
+      (fun a i inv ->
+         Z3Array.set a (T.int i) (block_dict primed inv.control_point)
+      )
+      a0 invariants
   in
 
   (** Start and destination basic blocks of the trace. *)
@@ -78,7 +76,11 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
   let x  = Array.init n (f false) in
   let x' = Array.init n (f true) in
 
-  (** eₖ(x) = the vector size n * m with the k-th component equal to x and other all components equal to 0. *)
+  (** eₖ(x) = the vector of size n with the components that correspond to the k-th
+      control points equal to x and other all components equal to 0.
+      ( 0 ----- 0 xᵢ ----- xⱼ  0 ------ 0 )
+      ∀n, i ≤ n ≤ j, cp(xₙ) = k
+  *)
   let var_to_cp = Invariants.get_var_to_cp invariants in
   let e k x =
     Array.mapi
