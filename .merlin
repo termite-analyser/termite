@@ -1,8 +1,6 @@
-B _build
-B _build/src
+B _build/*
 
-S .
-S src
+S src/*
 
 PKG num
 PKG unix
