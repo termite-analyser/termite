@@ -33,4 +33,4 @@ val algo1 :
   (bool -> Llvm.llvalue -> [< znum ] term) ->
   Invariants.invariant ->
   zbool term
-  -> Q.t array * Q.t
+  -> (Q.t array * Q.t) Debug.result

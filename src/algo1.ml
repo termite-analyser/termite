@@ -31,6 +31,22 @@ exception Timeout
 *)
 let algo1 ?(verbose=false) ?(timeout=10) block_dict var_dict invariant tau =
 
+  (** Perf markers *)
+  let loops = ref 0 in
+  let lp_max_size = ref (0,0) in
+  let update_lp_max_size (a,b) =
+    let (a',b') = !lp_max_size in
+    if (a * b) > (a' * b') then lp_max_size := (a, b)
+    else ()
+  in
+  let control_points = 1 in
+
+  let return result =
+    { result ; loops = !loops ; lp_max_size = !lp_max_size ;
+      control_points ;
+    }
+  in
+
   let {Invariants. variables ; control_point } = invariant in
 
   let cons_I = Invariants.to_matrix invariant in
@@ -89,6 +105,8 @@ let algo1 ?(verbose=false) ?(timeout=10) block_dict var_dict invariant tau =
 
   let rec aux c timeout =
 
+    incr loops ;
+
     if timeout = 0 then
       (* The algorithm has made too much iterations, terminate it *)
       raise Timeout;
@@ -112,13 +130,14 @@ let algo1 ?(verbose=false) ?(timeout=10) block_dict var_dict invariant tau =
           if verbose then
             begin
               Format.printf "x = %a@\n x' = %a@\n u = x - x' = %a@\n"
-                pp_coefs (None, Vector.T.get_value ~model x  , Vector.T.term x )
-                pp_coefs (None, Vector.T.get_value ~model x' , Vector.T.term x')
+                pp_coefs (Vector.T.get_value ~model x  , Vector.T.term x )
+                pp_coefs (Vector.T.get_value ~model x' , Vector.T.term x')
                 pp_qarray u
             end;
 
           (* Solve the LP problem *)
           let (lambda, delta) = Lp.lp_one_control_point ~verbose c cons_I in
+          update_lp_max_size (Array.length lambda, Array.length delta) ;
 
           if verbose then
             begin
@@ -129,7 +148,7 @@ let algo1 ?(verbose=false) ?(timeout=10) block_dict var_dict invariant tau =
           if Vector.isNull lambda then
             (* lambda is null, i.e. it isn't possible to have a better
                ranking function *)
-            (l, !constant)
+            return (l, !constant)
           else
             begin
               (* l <- sum_i=1..m lambda_j * l_j *)
@@ -155,7 +174,7 @@ let algo1 ?(verbose=false) ?(timeout=10) block_dict var_dict invariant tau =
         end
       | _ ->
           (* l is a strict ranking function *)
-          (l, !constant)
+          return (l, !constant)
   in
 
   aux [] timeout

@@ -105,38 +105,52 @@ let compute_ranking_function ~llf algo block_dict dictionnary invariants tau =
   match algo with
     | 1 ->
         let inv = get_unique_invariant ~llf invariants in
-        let l, c =
-          Algo1.algo1 ~verbose:!Config.debug block_dict dictionnary inv tau in
-        Format.printf "l = %a@,"
-          pp_coefs (Some c, l, Array.map (dictionnary false) inv.variables) ;
+        let res =
+          Algo1.algo1 ~verbose:!Config.debug block_dict dictionnary inv tau
+        in
+        let l, c = res.result in
+        let vars = Array.map (dictionnary false) inv.variables in
+        {res with result = [ (l, c, vars, true) ]}
     | 2 ->
         let inv = get_unique_invariant ~llf invariants in
-        let l, c, _b =
-          Monodimensional.monodimensional ~verbose:!Config.debug block_dict dictionnary inv tau in
-        Format.printf "l = %a@,"
-          pp_coefs (Some c, l, Array.map (dictionnary false) inv.variables) ;
+        let res =
+          Monodimensional.monodimensional
+            ~verbose:!Config.debug block_dict dictionnary inv tau
+        in
+        let l, c, b = res.result in
+        let vars = Array.map (dictionnary false) inv.variables in
+        {res with result = [ (l, c, vars, b) ]}
     | 3 ->
         let inv = get_unique_invariant ~llf invariants in
-        let v =
-          Multidimensional.multidimensional ~verbose:!Config.debug block_dict dictionnary inv tau in
-        begin match v with
-          | None -> print_endline "No ranking function found."
-          | Some v ->
-              List.iter (fun (l,c) ->
-                Format.printf "l = %a@,"
-                  pp_coefs (Some c, l, Array.map (dictionnary false) inv.variables) ;
-              ) v
-        end
+        let res =
+          Multidimensional.multidimensional
+            ~verbose:!Config.debug block_dict dictionnary inv tau in
+        let vars =  Array.map (dictionnary false) inv.variables in
+        let result = List.map (fun (l,c,b) -> (l,c, vars, b)) res.result
+        in
+        {res with result }
     | 4 ->
-        let l, c, _b =
-          MonodimMultiPc.monodimensional ~verbose:!Config.debug block_dict dictionnary invariants tau in
-        let variables, _, _ = Invariants.group_to_matrix invariants in
-        Format.printf "l = %a@,"
-          pp_coefs (Some c, l, Array.map (dictionnary false) variables) ;
-    | n -> Printf.printf "There is no algorithm n°%i\n%!" n
+        let res = MonodimMultiPc.monodimensional ~verbose:!Config.debug block_dict dictionnary invariants tau in
+        let l, c, b = res.result in
+        let vars, _, _ = Invariants.group_to_matrix invariants in
+        {res with result = [ (l, c, Array.map (dictionnary false) vars, b) ]}
+    | n -> failwith (Printf.sprintf "There is no algorithm n°%i" n)
 
+
+let print_result fmt res =
+  let pp_strict fmt b =
+    Format.pp_print_string fmt (if b then "strict" else "not strict")
+  in
+  let pp fmt (l,c, vars, strict) =
+    Format.fprintf fmt "l = %a@.The ranking function is %a"
+      pp_ranking_fun (c, l, vars)
+      pp_strict strict
+  in
+  pp_result (Format.pp_print_list pp) fmt res
 
 let do_analysis config =
+  let time = Unix.gettimeofday () in
+
   config.inputfile
   |> read_bitcode
   |> List.iter (fun llfun ->
@@ -144,11 +158,21 @@ let do_analysis config =
     then () (* If the function is empty, we just skip it. *)
     else begin
       let tau, invariants = llvm2smt llfun in
-      compute_ranking_function
-        llfun config.algotype
-        Llvm2Smt.get_block Llvm2Smt.get_var
-        invariants tau
-    end)
+      let res =
+        compute_ranking_function
+          llfun config.algotype
+          Llvm2Smt.get_block Llvm2Smt.get_var
+          invariants tau
+      in
+
+      (* Shouldn't be here, just a shortcut to print stuff *)
+      print_result Format.std_formatter res
+    end) ;
+
+  let new_time = Unix.gettimeofday () in
+  Format.printf "@.This analysis took %f seconds.@." (new_time -. time)
+
+
 
 
 exception NotFound of string

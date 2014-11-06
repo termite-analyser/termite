@@ -25,6 +25,23 @@ open ZZ
 *)
 let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
 
+  (** Perf markers *)
+  let loops = ref 0 in
+  let lp_max_size = ref (0,0) in
+  let update_lp_max_size (a,b) =
+    let (a',b') = !lp_max_size in
+    if (a * b) > (a' * b') then lp_max_size := (a, b)
+    else ()
+  in
+  let control_points = 1 in
+
+  let return result =
+    { result ; loops = !loops ; lp_max_size = !lp_max_size ;
+      control_points ;
+    }
+  in
+
+
   let {Invariants. variables ; control_point } = invariant in
 
   let cons_I = Invariants.to_matrix invariant in
@@ -93,6 +110,7 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
   let solver = Solver.make () in
 
   let rec aux c rays strict =
+    incr loops ;
 
     let av_space = Subspace.avoid_space b (Vector.T.term u) in
 
@@ -150,6 +168,7 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
 
           (* Solve the LP problem *)
           let (lambda, delta) = Lp.lp_one_control_point ~verbose c cons_I in
+          update_lp_max_size (Array.length lambda, Array.length delta) ;
 
           if verbose then
             begin
@@ -160,7 +179,7 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
           if Vector.isNull lambda then
             (* lambda is null, i.e. it isn't possible to have a better
                ranking function *)
-            l, !constant, false
+            return (l, !constant, false)
           else
             begin
               (* l <- sum_i=1..m lambda_j * l_j *)
@@ -188,7 +207,7 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
               aux c rays (Vector.hasNoNullExcept delta rays)
             end
         end
-      | _ -> l, !constant, strict
+      | _ -> return (l, !constant, strict)
   in
 
   aux [] [] false

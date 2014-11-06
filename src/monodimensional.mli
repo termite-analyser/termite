@@ -23,4 +23,4 @@ val monodimensional :
   (bool -> Llvm.llvalue -> [< znum ] term) ->
   Invariants.invariant ->
   zbool term ->
-  Q.t array * Q.t * bool
+  (Q.t array * Q.t * bool) Debug.result

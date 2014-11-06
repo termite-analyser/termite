@@ -25,15 +25,31 @@ open ZZ
 *)
 let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
 
+  (** Perf markers *)
+  let loops = ref 0 in
+  let lp_max_size = ref (0,0) in
+  let update_lp_max_size (a,b) =
+    let (a',b') = !lp_max_size in
+    if (a * b) > (a' * b') then lp_max_size := (a, b)
+    else ()
+  in
+  let control_points = List.length invariants in
+
+  let return result =
+    { result ; loops = !loops ; lp_max_size = !lp_max_size ;
+      control_points ;
+    }
+  in
+
+
   let variables, constants, cons_I = Invariants.group_to_matrix invariants in
 
-  (* The nb of invariants (and the size of the lambda). *)
+  (* The nb of constraints (and the size of the lambda). *)
   let m = Array.length cons_I in
 
   (* The nb of variables used by the polyhedron (and the size of the ranking function. *)
   let n = Array.length variables in
 
-  let nb_invariants = List.length invariants in
 
 
   (** The array from control_points (as ints) to basic block (as bools) *)
@@ -50,7 +66,7 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
   let cp = Symbol.declare Int "k" in
   let cp' = Symbol.declare Int "k'" in
 
-  let is_cp cp = T.(int 0 <= !cp && !cp < int nb_invariants) in
+  let is_cp cp = T.(int 0 <= !cp && !cp < int control_points) in
   let is_start_cp =
     let arr = index_to_cp false in
     T.( is_cp cp && Z3Array.get arr !cp )
@@ -130,6 +146,8 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
 
   let rec aux c rays strict =
 
+    incr loops ;
+
     let prob = T.and_ [
         T.( !rank = make_rank cp x ) ;
         T.( !rank' = make_rank cp' x') ;
@@ -187,7 +205,7 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
 
           (* Solve the LP problem *)
           let (lambda, delta) = Lp.lp_one_control_point ~verbose c cons_I in
-
+          update_lp_max_size (Array.length lambda, Array.length delta) ;
 
           if verbose then
             begin
@@ -198,7 +216,7 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
           if Vector.isNull lambda then
             (* lambda is null (and so is delta), i.e. it isn't possible
                to have a better ranking function *)
-            l, !constant, false
+            return (l, !constant, false)
           else
             begin
               (* l <- sum_i=1..m lambda_j * l_j *)
@@ -228,7 +246,7 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
               aux c rays (Vector.hasNoNullExcept delta rays)
             end
         end
-      | _ -> l, !constant, strict
+      | _ -> return (l, !constant, strict)
   in
 
   aux [] [] false

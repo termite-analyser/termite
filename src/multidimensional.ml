@@ -56,16 +56,19 @@ let multidimensional ?(verbose=false) block_dict var_dict invariant tau =
       end;
 
     (* Find a monodimensional weak ranking function *)
-    let l, offset, s = monodimensional ~u ~verbose block_dict var_dict invariant tau in
+    let res =
+      monodimensional ~u ~verbose block_dict var_dict invariant tau
+    in
+    let l, offset, s = res.result in
 
     if s then
       (* If l is strict, then l::rho is a strict multidimensional
          ranking function : return it *)
-      Some ((l, offset)::rho)
+      {res with result = (l, offset,s)::rho } (* Not true, but good enough *)
     else if (Subspace.is_in rho_basis l) then
       (* l is in Span(rho) i.e. rho cannot satisfy the remaining
          transitions *)
-      None
+      {res with result = rho} (* Not true, but good enough *)
     else
       begin
         (* Add l to the basis *)
@@ -73,7 +76,7 @@ let multidimensional ?(verbose=false) block_dict var_dict invariant tau =
 
         (* Remove the satisfied transitions from tau and
            reiterate *)
-        aux ((l, offset)::rho) T.(tau && Vector.T.(scalar_q (term u) l) = rat Q.zero)
+        aux ((l, offset,s)::rho) T.(tau && Vector.T.(scalar_q (term u) l) = rat Q.zero)
       end
   in
   aux [] tau

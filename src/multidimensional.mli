@@ -22,4 +22,4 @@ val multidimensional :
   (bool -> Llvm.llvalue -> [< znum ] term) ->
   Invariants.invariant ->
   zbool term ->
-  (Q.t array * Q.t) list option
+  (Q.t array * Q.t * bool) list Debug.result
