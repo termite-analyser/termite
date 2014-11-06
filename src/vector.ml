@@ -107,7 +107,7 @@ module T = struct
     in
     let l = Array.length u in
     assert (l = Array.length v1 && l = Array.length v2) ;
-    aux l T.true_
+    aux (l-1) T.true_
 
   (**
      [unsatisfied_by_ranking u l] returns the expression "u.l <= 0"

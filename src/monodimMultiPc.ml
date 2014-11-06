@@ -52,29 +52,35 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
 
 
 
-  (** The array from control_points (as ints) to basic block (as bools) *)
-  let index_to_cp primed =
+  (** Equivalence between boolean and control points.
+      ∀i, bᵢ <=> (k = i)
+  *)
+  let index_to_cp primed cp =
     let a0 = Z3Array.make (Array (Int,Bool)) T.false_ in
-    BatList.fold_lefti
-      (fun a i inv ->
-         Z3Array.set a (T.int i) (block_dict primed inv.control_point)
+    T.and_ @@
+    BatList.mapi
+      (fun i inv ->
+         T.( block_dict primed inv.control_point <=> (!cp = int i) )
       )
-      a0 invariants
+      invariants
   in
 
   (** Start and destination basic blocks of the trace. *)
   let cp = Symbol.declare Int "k" in
   let cp' = Symbol.declare Int "k'" in
 
-  let is_cp cp = T.(int 0 <= !cp && !cp < int control_points) in
-  let is_start_cp =
-    let arr = index_to_cp false in
-    T.( is_cp cp && Z3Array.get arr !cp )
+  let max_cp = control_points - 1 in
+  let is_cp cp = T.(int 0 <= !cp && !cp <= int max_cp) in
+
+  let assert_cp =
+    T.and_ [
+      is_cp cp ;
+      is_cp cp' ;
+      index_to_cp false cp ;
+      index_to_cp true cp' ;
+    ]
   in
-  let is_dest_cp =
-    let arr = index_to_cp true in
-    T.( is_cp cp' && Z3Array.get arr !cp' )
-  in
+
 
   let f b i =
     let var :> znum term = try
@@ -108,18 +114,12 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
       x
   in
 
-  let u =
-    BatArray.map2
-      (fun x x' -> Symbol.term Real T.( x - x' ))
-      (e cp x) (e cp' x')
-  in
-
+  let u = Vector.T.create Real "u" n in
 
   (* I /\ tau *)
   let rel = T.and_ [
       tau ;
-      is_start_cp ;
-      is_dest_cp ;
+      assert_cp ;
     ] in
 
   (* Basis of a subspace of vectors u such that u.l = 0 for all
@@ -130,16 +130,14 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
   let l = Array.make n Q.zero in
   let constant = ref Q.zero in
 
-  (** Values of the ranking function at k and k' control points. *)
-  let make_rank k x = Vector.T.(scalar_q (e k x) l) in
-  let rank = Symbol.declare Real "m" in
-  let rank' = Symbol.declare Real "m'" in
 
   let cost = Symbol.declare Real "cost" in
 
-  (* Minimize u.l : [cost + u.l = 0] *)
+  (* Minimize u.l(<=0) : [cost + u.l = 0 && cost >= 0 ] *)
   let make_cost_formula l =
-    T.(!cost + Vector.T.(scalar_q (term u) l) = int 0 )
+    T.(
+      !cost >= int 0 &&
+      !cost + Vector.T.(scalar_q (term u) l) = int 0 )
   in
 
   let solver = Solver.make () in
@@ -149,9 +147,7 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
     incr loops ;
 
     let prob = T.and_ [
-        T.( !rank = make_rank cp x ) ;
-        T.( !rank' = make_rank cp' x') ;
-        T.( !rank <= !rank') ;
+        Vector.T.(is_diff (term u) (e cp x) (e cp' x')) ; (* u = e^k(x) - e^k'(x') *)
         rel ;
         make_cost_formula l ;
         Subspace.avoid_space b (Vector.T.term u) ;
