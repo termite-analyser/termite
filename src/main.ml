@@ -150,27 +150,38 @@ let print_result fmt res =
 
 let do_analysis config =
   let time = Unix.gettimeofday () in
+  let nb_fun = ref 0 in
 
   config.inputfile
   |> read_bitcode
-  |> List.iter (fun llfun ->
+  |> BatList.filter_map (fun llfun ->
     if Array.length (Llvm.basic_blocks llfun) = 0
-    then () (* If the function is empty, we just skip it. *)
+    then None (* If the function is empty, we just skip it. *)
     else begin
       let tau, invariants = llvm2smt llfun in
-      let res =
-        compute_ranking_function
-          llfun config.algotype
-          Llvm2Smt.get_block Llvm2Smt.get_var
-          invariants tau
-      in
-
-      (* Shouldn't be here, just a shortcut to print stuff *)
-      print_result Format.std_formatter res
-    end) ;
+      if List.length invariants = 0 then None
+      else begin
+        incr nb_fun ;
+        let res =
+          compute_ranking_function
+            llfun config.algotype
+            Llvm2Smt.get_block Llvm2Smt.get_var
+            invariants tau
+        in
+        Some (llfun, res)
+      end
+    end)
+  |> Format.pp_print_list
+    (fun fmt (llfun, res) ->
+       Format.fprintf fmt "@.--- %s ----@." (Llvm.value_name llfun) ;
+       print_result fmt res
+    ) Format.std_formatter
+    ;
 
   let new_time = Unix.gettimeofday () in
-  Format.printf "@.This analysis took %f seconds.@." (new_time -. time)
+  Format.print_newline () ;
+  Format.printf "%i functions were analyzed.@." !nb_fun ;
+  Format.printf "This analysis took %f seconds.@." (new_time -. time)
 
 
 
