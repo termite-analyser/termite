@@ -46,6 +46,10 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
 
   let cons_I = Invariants.to_matrix invariant in
 
+  if verbose then begin
+    Format.printf "Constraint(I) =@. %a@." pp_zmatrix cons_I
+  end ;
+
   (* The nb of invariants (and the size of the lambda). *)
   let m = Array.length cons_I in
 
@@ -77,10 +81,6 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
           x x'
       end
   in
-
-  if verbose then begin
-    Format.printf "cons_I: %a@." pp_zmatrix cons_I ;
-  end ;
 
 
   (* Problem that the SMT solver will solve : *)

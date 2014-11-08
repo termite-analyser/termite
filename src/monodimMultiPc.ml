@@ -44,6 +44,10 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
 
   let variables, constants, cons_I = Invariants.group_to_matrix invariants in
 
+  if verbose then begin
+    Format.printf "Constraint(I) =@. %a@." pp_zmatrix cons_I
+  end ;
+
   (* The nb of constraints (and the size of the lambda). *)
   let m = Array.length cons_I in
 
