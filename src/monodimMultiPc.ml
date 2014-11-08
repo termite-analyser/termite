@@ -124,7 +124,22 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
   let rel = T.and_ [
       tau ;
       assert_cp ;
+      Vector.T.(is_diff (term u) (e cp x) (e cp' x')) ; (* u = e^k(x) - e^k'(x') *)
     ] in
+
+
+  (** Check if (x,x)∈τ, if it is, the function will never be strict. *)
+  let has_no_fixpoint =
+    let solver = Solver.make () in
+    Solver.add ~solver T.(rel && Vector.T.(is_null @@ term u)) ;
+    match Solver.check ~solver [] with
+      | Unsat _ -> true
+      | Sat (lazy model) -> begin
+          if verbose then Format.printf "Fixpoint Model:@.%s@." (Z3.Model.to_string model) ;
+          false
+        end
+      | Unkown _ -> assert false
+  in
 
   (* Basis of a subspace of vectors u such that u.l = 0 for all
      ranking function l *)
@@ -151,7 +166,6 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
     incr loops ;
 
     let prob = T.and_ [
-        Vector.T.(is_diff (term u) (e cp x) (e cp' x')) ; (* u = e^k(x) - e^k'(x') *)
         rel ;
         make_cost_formula l ;
         Subspace.avoid_space b (Vector.T.term u) ;
@@ -232,13 +246,11 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
                 constant := Q.( !constant + lambda.(i) * of_bigint constants.(i) )
               done ;
 
-              let delta_u = if unbounded then delta.(1) else delta.(0) in
-
-              if Q.equal delta_u Q.zero then
-                Subspace.add_to_subspace b u_val ;
+              Subspace.add_to_subspace b u_val ;
 
               if verbose then
                 begin
+                  Format.printf "Current subspace: @.%a@." Subspace.pp b;
                   Format.printf "l = %a@." pp_qarray l;
                   Format.printf "------@.";
                 end;
@@ -246,7 +258,7 @@ let monodimensional ?(verbose=false) block_dict var_dict invariants tau =
               aux c rays (Vector.hasNoNullExcept delta rays)
             end
         end
-      | _ -> return (l, !constant, strict)
+      | _ -> return (l, !constant, has_no_fixpoint && strict)
   in
 
   aux [] [] false

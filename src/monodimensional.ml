@@ -92,6 +92,16 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
       block_dict false control_point ;
     ] in
 
+
+  (** Check if (x,x)∈τ, if it is, the function will never be strict. *)
+  let has_no_fixpoint =
+    let solver = Solver.make () in
+    Solver.add ~solver T.(rel && Vector.T.(is_null @@ term u)) ;
+    match Solver.check ~solver [] with
+      | Unsat _ -> true
+      | _ -> false
+  in
+
   (* Basis of a subspace of vectors u such that u.l = 0 for all
      ranking function l *)
   let b = Subspace.empty_subspace n in
@@ -207,7 +217,7 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
               aux c rays (Vector.hasNoNullExcept delta rays)
             end
         end
-      | _ -> return (l, !constant, strict)
+      | _ -> return (l, !constant, has_no_fixpoint && strict)
   in
 
   aux [] [] false
