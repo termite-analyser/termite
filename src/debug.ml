@@ -5,18 +5,25 @@
 
 let pp_coefs fmt (coefs, vars) =
   assert (Array.length coefs = Array.length vars) ;
-  Format.fprintf fmt "%a*%s@ " Q.pp_print coefs.(0) (Smt.ZZ.T.to_string vars.(0)) ;
+  let c = coefs.(0) in
+  if Q.equal c Q.zero then ()
+  else
+    Format.fprintf fmt "%a*%s@ " Q.pp_print c (Smt.ZZ.T.to_string vars.(0)) ;
   for i = 1 to Array.length vars - 1 do
     let c = coefs.(i) in
-    if c = Q.zero then ()
+    if Q.equal c Q.zero then ()
     else
       Format.fprintf fmt "+ %a*%s@ " Q.pp_print c (Smt.ZZ.T.to_string vars.(i)) ;
   done
 
 let pp_ranking_fun fmt (constant, coefs, vars) =
-  pp_coefs fmt (coefs, vars) ;
-  if constant = Q.zero then ()
-  else Format.fprintf fmt "+ %a" Q.pp_print constant
+  if Q.equal constant Q.zero && Vector.isNull coefs then
+    Format.fprintf fmt "0"
+  else begin
+    pp_coefs fmt (coefs, vars) ;
+    if Q.equal constant Q.zero then ()
+    else Format.fprintf fmt "+ %a" Q.pp_print constant
+  end
 
 
 let rec pp_list ?(pp_sep = Format.pp_print_space) pp_v ppf = function
