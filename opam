@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "termite"
-version: "0.1"
+version: "dev"
 maintainer: "Gabriel Radanne <gabriel.radanne@pps.univ-paris-diderot.fr>"
 authors: "Gabriel Radanne <gabriel.radanne@pps.univ-paris-diderot.fr>"
 build: [
@@ -10,11 +10,12 @@ build: [
 ]
 remove: ["ocamlfind" "remove" "termite"]
 depends: [
-  "ocamlfind"
+  "ocamlfind" {build}
   "llvm"
   "zarith"
   "batteries"
-  "z3overlay"
+  "Z3" {= "4.3.2+mlopti"}
+  "Z3overlay"
   "llvm2smt"
   ## OASIS is not required in released version
   "oasis" {>= "0.4.4"}
