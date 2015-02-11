@@ -152,36 +152,57 @@ let do_analysis config =
   let time = Unix.gettimeofday () in
   let nb_fun = ref 0 in
 
-  config.inputfile
-  |> read_bitcode
-  |> BatList.filter_map (fun llfun ->
-    if Array.length (Llvm.basic_blocks llfun) = 0
-    then None (* If the function is empty, we just skip it. *)
-    else begin
-      let tau, invariants = llvm2smt llfun in
-      if List.length invariants = 0 then None
+  let results =
+    config.inputfile
+    |> read_bitcode
+    |> BatList.filter_map (fun llfun ->
+      if Array.length (Llvm.basic_blocks llfun) = 0
+      then None (* If the function is empty, we just skip it. *)
       else begin
-        incr nb_fun ;
-        let res =
-          compute_ranking_function
-            llfun config.algotype
-            Llvm2Smt.get_block Llvm2Smt.get_var
-            invariants tau
-        in
-        Some (llfun, res)
-      end
-    end)
-  |> Format.pp_print_list
-    (fun fmt (llfun, res) ->
-       Format.fprintf fmt "@.--- %s ----@." (Llvm.value_name llfun) ;
-       print_result fmt res
-    ) Format.std_formatter
-    ;
+        let tau, invariants = llvm2smt llfun in
+        if List.length invariants = 0 then None
+        else begin
+          incr nb_fun ;
+          let res =
+            compute_ranking_function
+              llfun config.algotype
+              Llvm2Smt.get_block Llvm2Smt.get_var
+              invariants tau
+          in
+          Some (llfun, res)
+        end
+      end)
+  in
+
+  let all_strict =
+    List.fold_left
+      (fun b (_,{result}) -> List.fold_left (fun x (_,_,_,b) -> x && b) b result)
+      true results
+  in
 
   let new_time = Unix.gettimeofday () in
-  Format.print_newline () ;
-  Format.printf "%i functions were analyzed.@." !nb_fun ;
-  Format.printf "This analysis took %f seconds.@." (new_time -. time)
+
+  if not !Config.compact then begin
+    Format.pp_print_list
+      (fun fmt (llfun, res) ->
+         Format.fprintf fmt "@.--- %s ----@." (Llvm.value_name llfun) ;
+         print_result fmt res
+      ) Format.std_formatter
+      results ;
+    Format.print_newline () ;
+    Format.printf "%i functions were analyzed.@." !nb_fun ;
+    Format.printf "This analysis took %f seconds.@." (new_time -. time) ;
+  end
+  else begin
+    if all_strict then print_string "YES"
+    else print_string "NO" ;
+    Format.printf " %f@." (new_time -. time) ;
+  end ;
+
+  all_strict
+
+
+
 
 
 
@@ -209,29 +230,30 @@ let read_args  () =
     ": Algo1(1),mono(2), multi(3) or multipc(4). Default is 4." ;
 
     "-v", Arg.Unit (fun () -> Config.debug := true),": Be verbose." ;
+    "-q", Arg.Unit (fun () -> Config.compact := true),": Be quiet." ;
   ]
   in
   let usage_msg = "Usage : termite [options] file" in
 
   Arg.parse speclist (set_and_verify_file cf) usage_msg ;
-    if !cf.inputfile = "" then begin Arg.usage speclist usage_msg ; exit 1 end;
+    if !cf.inputfile = "" then begin Arg.usage speclist usage_msg ; exit (-1) end;
     !cf
 (*end of options*)
 
 
 (*Main function*)
 
-let _ =
+let () =
   try
     let cf = read_args () in
-    do_analysis cf
+    if do_analysis cf then exit 0 else exit 1
   with
     | NotFound s ->
-        Printf.eprintf "File not found: %s\n%!" s ; exit 1
+        Printf.eprintf "File not found: %s\n%!" s ; exit (-1)
     | Sys_error s ->
-        Printf.eprintf "Sys_error: %s\n%!" s ; exit 1
+        Printf.eprintf "Sys_error: %s\n%!" s ; exit (-1)
     | Llvm2smt.Not_implemented llv ->
-        Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn llv ; exit 1
+        Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn llv ; exit (-1)
     | Llvm2smt.Variable_not_found x as exn ->
         Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn_var x ; raise exn
     | Llvm2smt.Block_not_found x as exn ->

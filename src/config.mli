@@ -9,3 +9,7 @@ val version : string
    else it details the steps of the computation
 *)
 val debug : bool ref
+
+
+(** If [compact] is true, termites will output more compact information. *)
+val compact : bool ref
