@@ -1,0 +1,41 @@
+/*
+ * Liste d'erreurs à corriger et propositions d'ameliorations
+ * A chaque fois il y a au moins un programme en exemple (de wtc)
+ */
+
+Fatal error : 
+	sipmamergesort.c
+	sipmamergesort2.c
+	
+	
+autre erreurs :
+	catmouse.c => termine ? (en vrai il termine bien mais en partant du principe que n<m)
+	counterex1b.c => si on enleve les random() du fichiers, termite ne prouve pas la terminaison,
+					mais si en plus on remplace ">=" par "=" termine prouve la terminaison
+
+
+Ameliorations : //1 -- facile
+	volatile int n -> int n (termite n'a pas l'air de supporter les variables volatiles)
+		fac.c
+	
+	returning a boolean instead of an int
+		perfect.c
+		perfect1.c
+		perfect2.c
+		perfectg.c
+		unperfect.c
+
+
+Ameliorations : //2 -- moyen (je crois)
+	break dans une condition sur des boucles simples
+		realbubble.c
+		
+	break dans les conditions (si on enleve "&& indet()" ca marche)
+		speedNestedMultiple.c
+	
+	
+Ameliorations : //3 -- difficile (probablement plus compliqués)
+	ajout de conditions avec une var>0
+		speedFails1.c
+		loops.c
+
