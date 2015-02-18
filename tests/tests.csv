@@ -1,0 +1,17 @@
+#PATHBENCHS=../../Artifact_PLDI/examples/wtc/
+#format : name,theoresult,termite feb15
+
+sipmamergesort.c,OK,ERROR
+sipmamergesort2.c,OK,ERROR
+catmouse.c,CTERM,OK   #conditional term, proved correct !
+
+fac.c,OK,DK #volatile not handled correctly
+perfect.c,OK,DK
+perfect1.c,OK,DK
+perfect2.c,OK,DK
+perfectg.c,OK,DK
+unperfect.c,OK,DK
+
+realbubble.c,OK,DK #breaks
+speedNestedMultiple.c,OK,DK
+
