@@ -1,20 +1,26 @@
 opam-version: "1.2"
 name: "termite"
 version: "dev"
-maintainer: "Gabriel Radanne <gabriel.radanne@pps.univ-paris-diderot.fr>"
-authors: "Gabriel Radanne <gabriel.radanne@pps.univ-paris-diderot.fr>"
+maintainer: "Gabriel Radanne <drupyog@zoho.com>"
+authors: "Gabriel Radanne <drupyog@zoho.com>"
+license: "LGPL"
+homepage: "https://github.com/Drup/llvmgraph"
+bug-reports: "https://github.com/Drup/llvmgraph/issues"
+dev-repo: "https://github.com/Drup/llvmgraph.git"
+
+tags: ["llvm" "Z3" "smt" "termination"]
 build: [
-  ["./configure" "--prefix" prefix]
-  [make]
-  [make "install"]
+  ["ocaml" "setup.ml" "-configure" "--prefix" prefix]
+  ["ocaml" "setup.ml" "-build"]
 ]
-remove: ["ocamlfind" "remove" "termite"]
+install: ["ocaml" "setup.ml" "-install"]
+remove: ["ocaml" "setup.ml" "-uninstall"]
 depends: [
   "ocamlfind" {build}
   "llvm"
   "zarith"
   "batteries"
-  "Z3" {= "4.3.2+mlopti"}
+  "Z3"
   "Z3overlay"
   "llvm2smt"
   ## OASIS is not required in released version
