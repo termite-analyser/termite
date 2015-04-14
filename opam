@@ -4,9 +4,9 @@ version: "dev"
 maintainer: "Gabriel Radanne <drupyog@zoho.com>"
 authors: "Gabriel Radanne <drupyog@zoho.com>"
 license: "LGPL"
-homepage: "https://github.com/Drup/llvmgraph"
-bug-reports: "https://github.com/Drup/llvmgraph/issues"
-dev-repo: "https://github.com/Drup/llvmgraph.git"
+homepage: "https://github.com/termite-analyser/termite"
+bug-reports: "https://github.com/termite-analyser/termite/issues"
+dev-repo: "https://github.com/termite-analyser/termite.git"
 
 tags: ["llvm" "Z3" "smt" "termination"]
 build: [
@@ -20,8 +20,7 @@ depends: [
   "llvm"
   "zarith"
   "batteries"
-  "Z3"
-  "Z3overlay"
+  "Z3overlay" {= "dev+opt"}
   "llvm2smt"
   ## OASIS is not required in released version
   "oasis" {>= "0.4.4"}
