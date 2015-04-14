@@ -3,7 +3,6 @@
 *)
 
 module ZZ : ZZ3_sigs.S
-module Opti : module type of ZZ3Optim.Make(ZZ)
 
 type relation = ZZ.zbool ZZ.term
 type expression = ZZ.znum ZZ.term

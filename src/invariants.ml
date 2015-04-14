@@ -213,10 +213,12 @@ let from_llfun llf =
     except the first node (no predecessor) and the return node (no successor).
 *)
 let get_pagai_control_points invar_mds =
-  let has_pred llb = Llvm_graph.predecessors llb <> [] in
-
   let aux l (llb, invs) =
-    if invs <> [] && has_pred llb && Llvm_graph.has_successor llb then llb :: l
+    let llf = Llvm.block_parent llb in
+    if invs <> [] &&
+       Llvmgraph.G.in_degree llf llb > 0 &&
+       Llvmgraph.G.out_degree llf llb > 0
+    then llb :: l
     else l
   in
 

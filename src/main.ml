@@ -4,7 +4,7 @@ open Debug
 open Llvm
 open Smt
 
-module SMTg = Smt_graph.Make (Smt.ZZ)
+module SMTg = Smtgraph.Make (Smt.ZZ)
 module Llvm2Smt = Llvm2smt.Init (Smt.ZZ) (SMTg)
 
 let print s =
@@ -45,10 +45,10 @@ let get_invariants_of_cpoint invariants cpoint =
 let llvm2smt llfun =
   print "Transforming %s into an smt formula.\n%!" (Llvm.value_name llfun) ;
   let open Llvm2Smt in
-  let open Llvm_graph in
+  let module L = Llvmcfg in
 
   (* Get the graph *)
-  let llb2node, llg = of_llfunction llfun in
+  let llb2node, llg = L.of_llfunction llfun in
 
   (* Get pagai's control points *)
   let cpoints = Invariants.(get_pagai_control_points @@ get_invariant_metadatas llfun) in
@@ -63,10 +63,10 @@ let llvm2smt llfun =
   let cp_invariants = List.map (get_invariants_of_cpoint invariants) cpoints in
 
   (* Break down the graph. *)
-  let llg' = break_list llg @@ basicblocks_to_vertices llg cpoints in
+  let llg' = L.break_by_list llg @@ L.basicblocks_to_vertices llg cpoints in
   if !Config.debug then begin
     let file = open_out (value_name llfun ^ ".term.dot") in
-    Dot.output_graph file llg' ;
+    L.Dot.output_graph file llg' ;
     close_out file ;
   end ;
 
@@ -83,7 +83,7 @@ let llvm2smt llfun =
   let encode_block inv =
     ZZ.T.imply
       (get_block false inv.Invariants.control_point)
-      (Invariants.to_smt (get_var false) inv)
+      (Invariants.to_smt (get_var ~primed:false) inv)
   in
   let smt_inv = ZZ.T.and_ @@ List.map encode_block invariants in
   print "Invariants Formula:\n%s\n%!" ZZ.T.(to_string smt_inv) ;
@@ -166,7 +166,8 @@ let do_analysis config =
           let res =
             compute_ranking_function
               llfun config.algotype
-              Llvm2Smt.get_block Llvm2Smt.get_var
+              (fun primed -> Llvm2Smt.get_block ~primed)
+              (fun primed -> Llvm2Smt.get_var ~primed)
               invariants tau
           in
           Some (llfun, res)

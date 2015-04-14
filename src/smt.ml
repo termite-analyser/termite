@@ -6,8 +6,6 @@
 module ZZ = ZZ3.Make(struct let ctx = Z3.mk_context [] end)
 open ZZ
 
-module Opti = ZZ3Optim.Make (ZZ)
-
 type relation = zbool term
 type expression = znum term
 

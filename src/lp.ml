@@ -104,18 +104,18 @@ let lp_one_control_point ?(verbose=false) v a =
     Format.printf "Lp: @[%a@]@." pp_lp_matrix mat
   end ;
 
-  let solver = Solver.make () in
-  Solver.add ~solver smt ;
-  Solver.add ~solver cost_smt ;
-  Solver.add ~solver cost_bound ;
+  let solver = Optimize.make () in
+  Optimize.add ~solver smt ;
+  Optimize.add ~solver cost_smt ;
+  Optimize.add ~solver cost_bound ;
+  let _obj = Optimize.maximize ~solver cost in
   let time = Unix.gettimeofday () in
-  let solution = Opti.check ~solver cost true in
+  let solution = Optimize.check ~solver in
   let time = Unix.gettimeofday () -. time in
   if verbose then Format.printf "LP problem solved in %f seconds.@." time ;
   match solution with
-    | Sat (lazy model), false ->
+    | Sat (lazy model) ->
         let lambda_res = Vector.T.get_value ~model lambda in
         let delta_res = Vector.T.get_value ~model delta in
         lambda_res, delta_res
-    | _ , true -> failwith "LP was unbounded ..."
     | _ -> assert false
