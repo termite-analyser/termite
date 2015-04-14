@@ -6,7 +6,6 @@ Authors:     Lucas Seguinot, David Monniaux, Laure Gonnord, Gabriel Radanne
 License:     LGPL with Ocaml linking exception
 Plugins:     META (0.3), DevFiles (0.3)
 
-AlphaFeatures: compiled_setup_ml, ocamlbuild_more_args
 BuildTools: ocamlbuild
 
 Library termite
@@ -29,6 +28,7 @@ Executable termite
 
 ## Doc
 
+AlphaFeatures: ocamlbuild_more_args
 Document "termite"
   Title: API reference for Termite
   Type: ocamlbuild (0.3)
