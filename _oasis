@@ -22,7 +22,7 @@ Library termite
 Executable termite
   Path: src
   MainIs: main.ml
-  BuildDepends: termite
+  BuildDepends: termite, cmdliner
   CompiledObject: best
 
 

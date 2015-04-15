@@ -11,5 +11,5 @@ val version : string
 val debug : bool ref
 
 
-(** If [compact] is true, termites will output more compact information. *)
-val compact : bool ref
+(** If [quiet] is true, termites will output more compact information. *)
+val quiet : bool ref

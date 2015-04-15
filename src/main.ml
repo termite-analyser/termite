@@ -1,5 +1,3 @@
-(*Main file for test. only one file for all algorithms*)
-
 open Debug
 open Llvm
 open Smt
@@ -7,16 +5,59 @@ open Smt
 module SMTg = Smtgraph.Make (Smt.ZZ)
 module Llvm2Smt = Llvm2smt.Init (Smt.ZZ) (SMTg)
 
+
+type algos =
+  | Algo1
+  | Monodimensional
+  | Multidimensional
+  | MonodimMultiPc
+
+let algo_to_string = function
+  | Algo1  -> "Algo1"
+  | Monodimensional  -> "Monodimensional"
+  | Multidimensional  -> "Multidimensional"
+  | MonodimMultiPc  -> "Monodimensional, Multiple control points"
+
+type file =
+  | C_file of string
+  | BC_file of string
+
 let print s =
   (if !Config.debug then Printf.fprintf else Printf.ifprintf) stdout s
 
-type config_t = {
-  inputfile:string;
-  algotype:int;
-}
+exception External_error of string * string * int
 
 (** Read the bitcode, output a list of llvm functions. *)
-let read_bitcode file =
+let read_bitcode pagai pagai_o clang clang_o file =
+  let file = match file with
+    | BC_file s -> s
+    | C_file c_file ->
+      print "Compiling C file %s to llvm bytecode.\n%!" c_file ;
+      let make_file base suffix = let open Filename in
+        concat (get_temp_dir_name ()) ((basename @@ chop_extension base) ^ suffix)
+      in
+      let clang_file = make_file c_file ".bc" in
+      let clang_log  = make_file c_file ".clang.log" in
+      let pagai_file = make_file c_file ".pagai.bc" in
+      let pagai_log  = make_file c_file ".pagai.log" in
+
+      let clang_command =
+        Printf.sprintf "%s %s -c -emit-llvm -o %s %s &> %s"
+          clang clang_o clang_file c_file clang_log
+      in
+      let clang_ret = Sys.command clang_command in
+      if clang_ret <> 0 then raise @@ External_error(clang_command, clang_log, clang_ret) ;
+
+      let pagai_command =
+        Printf.sprintf "%s %s -b %s -i %s &> %s"
+          pagai pagai_o pagai_file clang_file pagai_log
+      in
+      let pagai_ret = Sys.command pagai_command in
+      if pagai_ret <> 0 then raise @@ External_error(pagai_command, pagai_log, pagai_ret) ;
+
+      pagai_file
+  in
+
   print "Reading %s\n%!" file ;
   let ctx = Llvm.create_context () in
 
@@ -101,9 +142,9 @@ let get_unique_invariant ~llf = function
 
 (** Do I really need to tell you what it's doing ? :) *)
 let compute_ranking_function ~llf algo block_dict dictionnary invariants tau =
-  print "Computing ranking functions with algorithm n°%d \n%!" algo ;
+  print "Computing ranking functions with the algorithm: %s \n%!" (algo_to_string algo) ;
   match algo with
-    | 1 ->
+    | Algo1 ->
         let inv = get_unique_invariant ~llf invariants in
         let res =
           Algo1.algo1 ~verbose:!Config.debug block_dict dictionnary inv tau
@@ -111,7 +152,7 @@ let compute_ranking_function ~llf algo block_dict dictionnary invariants tau =
         let l, c = res.result in
         let vars = Array.map (dictionnary false) inv.variables in
         {res with result = [ (l, c, vars, true) ]}
-    | 2 ->
+    | Monodimensional ->
         let inv = get_unique_invariant ~llf invariants in
         let res =
           Monodimensional.monodimensional
@@ -120,7 +161,7 @@ let compute_ranking_function ~llf algo block_dict dictionnary invariants tau =
         let l, c, b = res.result in
         let vars = Array.map (dictionnary false) inv.variables in
         {res with result = [ (l, c, vars, b) ]}
-    | 3 ->
+    | Multidimensional ->
         let inv = get_unique_invariant ~llf invariants in
         let res =
           Multidimensional.multidimensional
@@ -129,12 +170,11 @@ let compute_ranking_function ~llf algo block_dict dictionnary invariants tau =
         let result = List.map (fun (l,c,b) -> (l,c, vars, b)) res.result
         in
         {res with result }
-    | 4 ->
+    | MonodimMultiPc ->
         let res = MonodimMultiPc.monodimensional ~verbose:!Config.debug block_dict dictionnary invariants tau in
         let l, c, b = res.result in
         let vars, _, _ = Invariants.group_to_matrix invariants in
         {res with result = [ (l, c, Array.map (dictionnary false) vars, b) ]}
-    | n -> failwith (Printf.sprintf "There is no algorithm n°%i" n)
 
 
 let print_result fmt res =
@@ -148,13 +188,13 @@ let print_result fmt res =
   in
   pp_result (Format.pp_print_list pp) fmt res
 
-let do_analysis config =
+let do_analysis pagai pagai_o clang clang_o algo file =
   let time = Unix.gettimeofday () in
   let nb_fun = ref 0 in
 
   let results =
-    config.inputfile
-    |> read_bitcode
+    file
+    |> read_bitcode pagai pagai_o clang clang_o
     |> BatList.filter_map (fun llfun ->
       if Array.length (Llvm.basic_blocks llfun) = 0
       then None (* If the function is empty, we just skip it. *)
@@ -165,7 +205,7 @@ let do_analysis config =
           incr nb_fun ;
           let res =
             compute_ranking_function
-              llfun config.algotype
+              llfun algo
               (fun primed -> Llvm2Smt.get_block ~primed)
               (fun primed -> Llvm2Smt.get_var ~primed)
               invariants tau
@@ -183,7 +223,7 @@ let do_analysis config =
 
   let new_time = Unix.gettimeofday () in
 
-  if not !Config.compact then begin
+  if not !Config.quiet then begin
     Format.pp_print_list
       (fun fmt (llfun, res) ->
          Format.fprintf fmt "@.--- %s ----@." (Llvm.value_name llfun) ;
@@ -202,60 +242,91 @@ let do_analysis config =
 
   all_strict
 
+open Cmdliner
 
+let debug_t =
+  let doc = "Print extra debugging information." in
+  Arg.(value & flag & info ["d";"debug"] ~doc)
 
+let quiet_t =
+  let doc = "Print a compressed answer." in
+  Arg.(value & flag & info ["q";"quiet"] ~doc)
 
+let algo_t =
+  let algos = [ "1", Algo1 ; "2", Monodimensional ;
+                "3", Multidimensional ; "4", MonodimMultiPc ] in
+  let doc =
+    "Which algorithm. $(docv) must be one of \
+     1 (Algo1), 2 (mono), 3 (multi) or 4 (multipc)." in
+  Arg.(value & opt (enum algos) MonodimMultiPc & info ["algo"] ~docv:"ALGO" ~doc)
 
-
-
-exception NotFound of string
-
-let set_numalgo config nb= config := {!config with algotype=nb}
-let make_default_config () = {inputfile = "" ; algotype = 4 }
-let set_and_verify_file config (s:string) =
-  if not (Sys.file_exists s)  then  raise (NotFound s)
-  else
-      config := {!config with inputfile=s}
-
-
-let read_args  () =
-  let cf = ref (make_default_config ()) in
-  let speclist = [
-    "--version",
-    Arg.Unit (fun () ->
-      Printf.printf "Termite Version %s \n%!" Config.version; exit 0),
-    ": print version and exit" ;
-
-    "-algo",
-    Arg.Int (set_numalgo cf),
-    ": Algo1(1),mono(2), multi(3) or multipc(4). Default is 4." ;
-
-    "-v", Arg.Unit (fun () -> Config.debug := true),": Be verbose." ;
-    "-q", Arg.Unit (fun () -> Config.compact := true),": Be quiet." ;
-  ]
+let file_t =
+  let doc =
+    "File processed by termite. \
+     If it's a .c file, clang and pagai will be called on it to produce a llvm bitcode. \
+     Otherwise, if it's a .bc file, it is assumed to have been already preprocessed by pagai."
   in
-  let usage_msg = "Usage : termite [options] file" in
+  let c_or_bc_file =
+    let pa, pp = Arg.non_dir_file in
+    let pa s = match pa s with
+      | `Ok s when Filename.check_suffix s ".c"  -> `Ok (C_file s)
+      | `Ok s when Filename.check_suffix s ".bc" -> `Ok (BC_file s)
+      | `Ok s -> `Error (Arg.doc_quote s ^" is neither a .c file nor a .bc file")
+      | `Error x -> `Error x
+    in
+    let pp fmt (C_file s | BC_file s) = pp fmt s in
+    (pa, pp)
+  in
+  Arg.(required & pos 0 (some c_or_bc_file) None & info [] ~doc ~docv:"FILE")
 
-  Arg.parse speclist (set_and_verify_file cf) usage_msg ;
-    if !cf.inputfile = "" then begin Arg.usage speclist usage_msg ; exit (-1) end;
-    !cf
-(*end of options*)
+let pagai_t =
+  let doc = "Path to the pagai executable." in
+  Arg.(value & opt string "pagai" & info ["pagai"] ~doc)
+
+let pagai_opt_t =
+  let doc = "Pagai options." in
+  Arg.(value & opt string "" & info ["pagai-opt"] ~doc)
+
+let clang_t =
+  let doc = "Path to the clang executable." in
+  Arg.(value & opt string "clang" & info ["clang"] ~doc)
+
+let clang_opt_t =
+  let doc = "Clang options." in
+  Arg.(value & opt string "" & info ["clang-opt"] ~doc)
+
+let ret_error f = Printf.ksprintf (fun s -> `Error (false, s)) f
+
+let termite_t debug quiet pagai pagai_o clang clang_o algo file =
+  Config.debug := debug ;
+  Config.quiet := quiet ;
+  try `Ok (do_analysis pagai pagai_o clang clang_o algo file)
+  with
+    | Sys_error s ->
+      ret_error "System error: %s\n%!" s
+    | Llvm2smt.Not_implemented llv ->
+      ret_error "%s\n%!" @@ Llvm2smt.sprint_exn llv
+    | External_error (cmd, log, code) ->
+      ret_error "\"%s\" failed with error %i. See %s for details." cmd code log
+    | Llvm2smt.Variable_not_found x as exn ->
+      Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn_var x ; raise exn
+    | Llvm2smt.Block_not_found x as exn ->
+      Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn_block x ; raise exn
+
+let termite_info =
+  let doc = "A termination analyser." in
+  Term.info ~doc ~version:Config.version "termite"
 
 
-(*Main function*)
 
 let () =
-  try
-    let cf = read_args () in
-    if do_analysis cf then exit 0 else exit 1
-  with
-    | NotFound s ->
-        Printf.eprintf "File not found: %s\n%!" s ; exit (-1)
-    | Sys_error s ->
-        Printf.eprintf "Sys_error: %s\n%!" s ; exit (-1)
-    | Llvm2smt.Not_implemented llv ->
-        Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn llv ; exit (-1)
-    | Llvm2smt.Variable_not_found x as exn ->
-        Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn_var x ; raise exn
-    | Llvm2smt.Block_not_found x as exn ->
-        Printf.eprintf "%s\n%!" @@ Llvm2smt.sprint_exn_block x ; raise exn
+  let open Term in
+  let t = pure termite_t $ debug_t $ quiet_t
+    $ pagai_t $ pagai_opt_t $ clang_t $ clang_opt_t
+    $ algo_t $ file_t
+  in
+  match eval (ret t,termite_info) with
+    | `Ok true -> exit 0
+    | `Ok false -> exit 1
+    | `Version | `Help -> exit 0
+    | `Error _ -> exit (-1)

@@ -17,6 +17,7 @@ install: ["ocaml" "setup.ml" "-install"]
 remove: ["ocaml" "setup.ml" "-uninstall"]
 depends: [
   "ocamlfind" {build}
+  "cmdliner"
   "llvm"
   "zarith"
   "batteries"

@@ -11,3 +11,4 @@ PKG Z3overlay.optim
 PKG llvm2smt
 PKG llvm
 PKG batteries
+PKG cmdliner
