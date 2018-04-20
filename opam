@@ -21,7 +21,7 @@ depends: [
   "llvm"
   "zarith"
   "batteries"
-  "Z3overlay" {= "dev+opt"}
+  "z3overlay"
   "llvm2smt"
   ## OASIS is not required in released version
   "oasis" {>= "0.4.4"}

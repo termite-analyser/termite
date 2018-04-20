@@ -12,7 +12,7 @@ Library termite
   Path: src
   BuildDepends:
     batteries, zarith,
-    Z3, Z3overlay,
+    z3, z3overlay,
     llvm.bitreader, llvm.scalar_opts, llvm2smt
   Modules:
     Config, Debug, Vector, Subspace, Smt,
