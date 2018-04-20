@@ -110,7 +110,7 @@ let lp_one_control_point ?(verbose=false) v a =
   Optimize.add ~solver cost_bound ;
   let _obj = Optimize.maximize ~solver cost in
   let time = Unix.gettimeofday () in
-  let solution = Optimize.check ~solver in
+  let solution = Optimize.check ~solver [] in
   let time = Unix.gettimeofday () -. time in
   if verbose then Format.printf "LP problem solved in %f seconds.@." time ;
   match solution with

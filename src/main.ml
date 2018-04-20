@@ -325,8 +325,4 @@ let () =
     $ pagai_t $ pagai_opt_t $ clang_t $ clang_opt_t
     $ algo_t $ file_t
   in
-  match eval (ret t,termite_info) with
-    | `Ok true -> exit 0
-    | `Ok false -> exit 1
-    | `Version | `Help -> exit 0
-    | `Error _ -> exit (-1)
+  exit @@ eval (ret t,termite_info)

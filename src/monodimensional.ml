@@ -138,7 +138,7 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
     (*   Format.printf "smt-solve a pb of size (#or + #and) %d @." (Smt.size_of_formula prob); *)
     let obj = Optimize.maximize ~solver T.(!cost) in
 
-    match Optimize.check ~solver with
+    match Optimize.check ~solver [] with
       | Sat (lazy model) -> begin
           if verbose then Format.printf "Model: %s@." (Z3.Model.to_string model) ;
           (* The problem is satisfiable *)
@@ -152,7 +152,7 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
 
           (* If an unbounded ray is found, add it to c *)
           let c, rays =
-            if Optimize.get_upper ~solver obj |> T.symbol |> T.to_string = "oo"
+            if Optimize.get_upper obj |> T.symbol |> T.to_string = "oo"
             then c, rays (* Nothing to do *)
             else
               let cost_val = Model.get_value ~model cost in
@@ -160,7 +160,7 @@ let monodimensional ?u ?(verbose=false) block_dict var_dict invariant tau =
               Optimize.add ~solver T.(!cost <= rat cost_val + int 1) ;
               let _objective = Optimize.maximize ~solver T.(!cost) in
               let ray =
-                match Optimize.check ~solver with
+                match Optimize.check ~solver [] with
                   | Sat (lazy model) -> begin
                       let v = Vector.T.get_value ~model u in
                       let ray = Vector.sub v u_val in
